@@ -1,9 +1,147 @@
-<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"><title>Hello Kaboom</title></head>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Hale's Data Quest – v4</title>
+  <style>
+    html,body{margin:0;height:100%;background:#0e0f14}
+    #game{display:block;width:100vw;height:100vh}
+    .note{position:fixed;top:8px;left:8px;color:#9be9a8;font:14px/1.2 system-ui}
+  </style>
+</head>
 <body>
-<canvas id="game"></canvas>
-<script src="kaboom.js"></script>
-<script>
-kaboom({ global:true, canvas: document.querySelector("#game"), width: 640, height: 360, background:[14,15,20] });
-add([ rect(60,60), pos(100,120), color(255,207,64) ]);
-</script>
-</body></html>
+  <div class="note">← → hareket • ↑ / Space zıpla • Toprak=❤️ • Düşman=hasar</div>
+  <canvas id="game"></canvas>
+  <!-- ÖNEMLİ: kaboom.js dosyan bu HTML ile AYNI klasörde olmalı -->
+  <script src="kaboom.js"></script>
+  <script>
+  // ---------- KABOOM BOOT ----------
+  kaboom({ global:true, canvas:document.querySelector("#game"), width:960, height:540, background:[14,15,20], letterbox:true });
+
+  // ---------- RENKLER ----------
+  const COL = {
+    player: rgb(255,207,64), ground: rgb(140,160,220), friend: rgb(155,233,168),
+    foe: rgb(255,98,98), coin: rgb(255,222,89), ink: rgb(20,25,36),
+    purple: rgb(180,130,255), gray: rgb(180,180,200), green: rgb(120,220,150)
+  };
+
+  // ---------- SAHNE: MENÜ ----------
+  scene("menu", () => {
+    const title = add([
+      text("Hale’s Data Quest", { size: 48, align: "center" }),
+      anchor("center"), pos(width()/2, height()/2 - 40), color(255,255,255)
+    ]);
+    add([
+      text("Press ENTER or CLICK to start", { size: 22, align: "center" }),
+      anchor("center"), pos(width()/2, height()/2 + 20), color(200,220,255)
+    ]);
+
+    // basit dekor – sarı kutu (Hale)
+    add([ rect(40,60), pos(width()/2 - 150, height()/2 + 100), color(COL.player), outline(3, rgb(30,25,10)) ]);
+    // kalp (Toprak temsili)
+    add([ rect(22,22), pos(width()/2 + 110, height()/2 + 110), color(COL.friend), outline(2, COL.ink) ]);
+
+    onKeyPress("enter", () => go("game"));
+    onClick(() => go("game"));
+  });
+
+  // ---------- SAHNE: OYUN ----------
+  scene("game", () => {
+    gravity(1600);
+
+    let hp=5, score=0;
+
+    // UI (sade)
+    const ui = add([pos(12,12)]);
+    const hpTxt = ui.add([text("",{size:24}), color(255,255,255)]);
+    const scTxt = ui.add([pos(0,26), text("",{size:18}), color(180,220,255)]);
+    const upd = ()=>{ hpTxt.text="HP: "+"❤".repeat(hp); scTxt.text="Skor: "+score; };
+    upd();
+
+    // Zemin & platformlar
+    function platform(x,y,w=200,h=24){ add([rect(w,h), pos(x,y), area(), body({isStatic:true}), outline(2,COL.ink), color(COL.ground)]); }
+    const floorY=500;
+    platform(-40,floorY,2200,32);
+    platform(220,420,200,24);
+    platform(520,360,180,24);
+    platform(780,300,180,24);
+    platform(1120,360,200,24);
+    platform(1380,300,180,24);
+
+    // Oyuncu (Hale)
+    const p = add([rect(28,40), pos(60,300), area(), body(), color(COL.player), outline(3, rgb(30,25,10)), anchor("center")]);
+    p.add([pos(-6,-5), rect(6,6), color(0,0,0)]);
+    p.add([pos(6,-5),  rect(6,6), color(0,0,0)]);
+
+    // Hareket
+    const SPEED=260, JUMP=520;
+    onKeyDown("left", ()=>p.move(-SPEED,0));
+    onKeyDown("right",()=>p.move( SPEED,0));
+    function jump(){ if(p.isGrounded()) p.jump(JUMP); }
+    onKeyPress("up", jump); onKeyPress("space", jump);
+
+    // Düşerse
+    p.onUpdate(()=>{ if(p.pos.y>900){ damage(1); respawn(); }});
+    function respawn(){ p.pos=vec2(60,300); }
+    function damage(n=1){ hp-=n; shake(6); if(hp<=0) go("over", score); else upd(); }
+    function heal(n=1){ hp=Math.min(5,hp+n); upd(); }
+    function gain(n=10){ score+=n; upd(); }
+
+    // Etiket yardımcı
+    function label(t){ return [text(t,{size:12}), color(235,235,235), outline(2, rgb(10,10,10)), anchor("center"), pos(0,-26)]; }
+
+    // Toprak (iyileştirir)
+    function friend(x,y){
+      const f=add([pos(x,y), area(), anchor("center"), "friend"]);
+      f.add([rect(20,26), color(COL.friend), outline(2,COL.ink), anchor("center")]);
+      f.add([pos(0,-22), rect(18,12), color(COL.friend), outline(2,COL.ink), anchor("center")]);
+      f.add(label("Toprak ❤️"));
+      return f;
+    }
+
+    // devriye
+    function patrol(speed=80, range=100){ let dir=1; const org=vec2();
+      return { id:"patrol", require:["pos"], add(){org.x=this.pos.x},
+        update(){ this.move(speed*dir,0); if(Math.abs(this.pos.x-org.x)>range) dir*=-1; } };
+    }
+
+    // Düşmanlar (sade şekiller — sürüm nazını engeller)
+    function foe_red(x,y,s=120,r=140,txt="ADHD Monster"){ const e=add([pos(x,y), area(), anchor("center"), patrol(s,r)]); e.add([rect(28,24), color(COL.foe), outline(2,COL.ink), anchor("center")]); e.add(label(txt)); return e; }
+    function foe_gray(x,y,s=90,r=120,txt="Regretourus"){ const e=add([pos(x,y), area(), anchor("center"), patrol(s,r)]); e.add([rect(34,22), color(COL.gray), outline(2,COL.ink), anchor("center")]); e.add(label(txt)); return e; }
+    function foe_green(x,y,s=60,r=90,txt="Middle-Aged Monster"){ const e=add([pos(x,y), area(), anchor("center"), patrol(s,r)]); e.add([rect(26,24), color(COL.green), outline(2,COL.ink), anchor("center")]); e.add(label(txt)); return e; }
+    function foe_purple(x,y,s=100,r=160,txt="Octopus-Woman"){ const e=add([pos(x,y), area(), anchor("center"), patrol(s,r)]); e.add([rect(24,24), color(COL.purple), outline(2,COL.ink), anchor("center")]); e.add(label(txt)); return e; }
+
+    // Coin
+    function coin(x,y){ const c=add([pos(x,y), area(), anchor("center"), "coin"]); c.add([rect(12,12), color(COL.coin), outline(2,COL.ink), anchor("center")]); return c; }
+
+    // Yerleşim
+    friend(820,260); friend(1420,260);
+    foe_red(360,380); foe_gray(640,340); foe_green(1120,340); foe_purple(1380,280);
+    coin(260,390); coin(780,280); coin(1180,330); coin(1460,260);
+
+    // Çarpışmalar
+    p.onCollide((obj)=>{
+      const t = obj?.children?.find?.(c => c.text)?.text || "";
+      if (t.includes("Toprak")) { heal(1); destroy(obj); }
+      else if (["ADHD","Regretourus","Middle-Aged","Octopus"].some(k=>t.includes(k))) { damage(1); }
+    });
+    p.onCollide("coin",(c)=>{ gain(10); destroy(c); });
+  });
+
+  // ---------- SAHNE: GAME OVER ----------
+  scene("over", (score=0) => {
+    add([ text("Oyun Bitti", { size: 42, align: "center" }), anchor("center"), pos(width()/2, height()/2 - 40), color(255,255,255) ]);
+    add([ text("Skor: " + score, { size: 28, align: "center" }), anchor("center"), pos(width()/2, height()/2), color(200,220,255) ]);
+    add([ text("May the Data be with You ✨", { size: 22, align: "center" }), anchor("center"), pos(width()/2, height()/2 + 40), color(255,255,255) ]);
+    add([ text("[R] Restart   |   [M] Menu", { size: 16, align: "center" }), anchor("center"), pos(width()/2, height()/2 + 88), color(200,200,200) ]);
+    onKeyPress("r", ()=> go("game"));
+    onKeyPress("m", ()=> go("menu"));
+    onClick(()=> go("game"));
+  });
+
+  // Başlangıç
+  go("menu");
+  </script>
+</body>
+</html>
