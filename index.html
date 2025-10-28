@@ -18,14 +18,14 @@
   <script>
   // ---------- KABOOM BOOT ----------
   const k = kaboom({
-  global: true,
-  canvas: document.querySelector("#game"),
-  width: 960,
-  height: 540,
-  background: [14,15,20],
-  letterbox: true,
+    global: true,
+    canvas: document.querySelector("#game"),
+    width: 960,
+    height: 540,
+    background: [14,15,20],
+    letterbox: true,
   });
-  const { gravity, add, rect, pos, area, body, color, outline, anchor, text, rgb, onKeyDown, onKeyPress, go, scene, shake, destroy, every, width, height, center, vec2 } = k;
+  const { add, rect, pos, area, body, color, outline, anchor, text, rgb, onKeyDown, onKeyPress, go, scene, shake, destroy, width, height, center, vec2 } = k;
 
   // ---------- RENKLER ----------
   const COL = {
@@ -56,7 +56,7 @@
 
   // ---------- SAHNE: OYUN ----------
   scene("game", () => {
-    gravity(1600);
+    k.setGravity(1600);
 
     let hp=5, score=0;
 
@@ -153,5 +153,6 @@
   </script>
 </body>
 </html>
+
 
 
