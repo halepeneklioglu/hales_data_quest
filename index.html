@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Hale's Data Quest – v4 (stable)</title>
+  <title>Hale's Data Quest – v4 (stable+)</title>
   <style>
     html,body{margin:0;height:100%;background:#0e0f14}
     #game{display:block;width:100vw;height:100vh}
@@ -14,7 +14,7 @@
   <div class="note">← → hareket • ↑ / Space zıpla • Toprak=❤️ • Düşman=hasar</div>
   <canvas id="game"></canvas>
 
-  <!-- kaboom.js BU HTML ile aynı klasörde olmalı -->
+  <!-- kaboom.js BU HTML ile aynı klasörde olmalı (önerilen: 3000.1.17) -->
   <script src="kaboom.js"></script>
   <script>
   // -------- KABOOM BOOT --------
@@ -66,7 +66,6 @@
 
   // -------- SAHNE: OYUN --------
   scene("game", () => {
-    // v3000 serisinde gravity() yok → setGravity
     if (typeof k.setGravity === "function") k.setGravity(1600);
 
     let hp = 5, score = 0;
@@ -124,7 +123,7 @@
       return f;
     }
 
-    // Düşmanlar — ŞEKİL+area aynı nesnede (aksi halde renderArea hatası verir)
+    // Düşmanlar
     function foe_red(x,y,s=120,r=140,txt="ADHD Monster"){
       const e = add([ rect(28,24), pos(x,y), area(), anchor("center"),
                        color(COL.foe), outline(2, COL.ink), "foe", patrol(s,r) ]);
@@ -152,15 +151,37 @@
                    color(COL.coin), outline(2, COL.ink), "coin" ]);
     }
 
+    // 🔹 Sağlık kalpleri (heal pickups)
+    function heart(x,y){
+      return add([ rect(14,12), pos(x,y), area(), anchor("center"),
+                   color(255,120,120), outline(2, COL.ink), "heart" ]);
+    }
+
     // Yerleşim
     friend(820,260); friend(1420,260);
-    foe_red(360,380); foe_gray(640,340); foe_green(1120,340); foe_purple(1380,280);
+    foe_red(360,380); foe_gray(640,340);
+    // 🔹 İki yeni düşman:
+    foe_green(900, 340, 70, 100, "Middle-Aged Monster");
+    foe_purple(1250, 300, 110, 160, "Octopus-Woman");
+
     coin(260,390); coin(780,280); coin(1180,330); coin(1460,260);
 
-    // Çarpışmalar (etiketlerle basit)
+    // 🔹 Sağlık kalpleri yerleşimi
+    heart(600, 330);
+    heart(1280, 280);
+
+    // 🔹 Bitiş bayrağı
+    const finish = add([
+      rect(18, 60), pos(1650, 260), area(),
+      color(255,230,120), outline(2, COL.ink), "finish"
+    ]);
+
+    // Çarpışmalar
     p.onCollide("friend", (f)=>{ heal(1); destroy(f); });
     p.onCollide("foe",    ()=>{ damage(1); });
     p.onCollide("coin",   (c)=>{ gain(10); destroy(c); });
+    p.onCollide("heart",  (h)=>{ heal(1); destroy(h); });
+    p.onCollide("finish", ()=>{ go("win", score); });
   });
 
   // -------- SAHNE: GAME OVER --------
@@ -174,6 +195,21 @@
     add([ text("[R] Restart   |   [M] Menu", { size: 16, align:"center" }),
           anchor("center"), pos(width()/2, height()/2 + 88), color(200,200,200) ]);
 
+    onKeyPress("r", ()=> go("game"));
+    onKeyPress("m", ()=> go("menu"));
+    onClick(()=> go("game"));
+  });
+
+  // -------- SAHNE: WIN --------
+  scene("win", (score=0) => {
+    add([ text("Mission Complete!", { size: 42, align: "center" }),
+          anchor("center"), pos(width()/2, height()/2 - 40), color(255,255,255) ]);
+    add([ text("Skor: " + score, { size: 28, align: "center" }),
+          anchor("center"), pos(width()/2, height()/2), color(200,220,255) ]);
+    add([ text("May the Data be with You ✨", { size: 22, align: "center" }),
+          anchor("center"), pos(width()/2, height()/2 + 40), color(255,255,255) ]);
+    add([ text("[R] Restart   |   [M] Menu", { size: 16, align: "center" }),
+          anchor("center"), pos(width()/2, height()/2 + 88), color(200,200,200) ]);
     onKeyPress("r", ()=> go("game"));
     onKeyPress("m", ()=> go("menu"));
     onClick(()=> go("game"));
