@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Hale's Data Quest – v4 (stable+)</title>
+  <title>Hale's Data Quest – v4 (camera)</title>
   <style>
     html,body{margin:0;height:100%;background:#0e0f14}
     #game{display:block;width:100vw;height:100vh}
@@ -14,7 +14,7 @@
   <div class="note">← → hareket • ↑ / Space zıpla • Toprak=❤️ • Düşman=hasar</div>
   <canvas id="game"></canvas>
 
-  <!-- kaboom.js BU HTML ile aynı klasörde olmalı (önerilen: 3000.1.17) -->
+  <!-- Önerilen kaboom: 3000.1.17 (aynı klasörde) -->
   <script src="kaboom.js"></script>
   <script>
   // -------- KABOOM BOOT --------
@@ -27,7 +27,10 @@
     letterbox: true,
   });
   const { add, rect, pos, area, body, color, outline, anchor, text, rgb,
-          onKeyDown, onKeyPress, go, scene, shake, destroy, width, height, center, vec2 } = k;
+          onKeyDown, onKeyPress, go, scene, shake, destroy, width, height, center, vec2, camPos } = k;
+
+  // küçük yardımcı
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
   // -------- RENKLER --------
   const COL = {
@@ -68,11 +71,15 @@
   scene("game", () => {
     if (typeof k.setGravity === "function") k.setGravity(1600);
 
+    // Level uzunluğu (kamerayı bu aralıkta tutacağız)
+    const LEVEL_END = 1750;
+
     let hp = 5, score = 0;
 
-    // UI
-    const hpTxt = add([pos(12,12), text("", {size:24}), color(255,255,255)]);
-    const scTxt = add([pos(12,38), text("", {size:18}), color(180,220,255)]);
+    // UI → ekrana sabit
+    const hpTxt = add([ text("", {size:24}), color(255,255,255), pos(12,12) ]);
+    const scTxt = add([ text("", {size:18}), color(180,220,255), pos(12,38) ]);
+    if (typeof k.fixed === "function") { hpTxt.use(k.fixed()); scTxt.use(k.fixed()); }
     const upd = () => { hpTxt.text = "HP: " + "❤".repeat(hp); scTxt.text = "Skor: " + score; };
     upd();
 
@@ -81,7 +88,7 @@
       add([ rect(w,h), pos(x,y), area(), body({isStatic:true}), outline(2, COL.ink), color(COL.ground) ]);
     }
     const floorY = 500;
-    platform(-40, floorY, 2200, 32);
+    platform(-40, floorY, LEVEL_END + 200, 32);   // zemini level sonuna kadar uzat
     platform(220, 420, 200, 24);
     platform(520, 360, 180, 24);
     platform(780, 300, 180, 24);
@@ -95,6 +102,12 @@
     ]);
     p.add([pos(-6,-5), rect(6,6), color(0,0,0)]);
     p.add([pos( 6,-5), rect(6,6), color(0,0,0)]);
+
+    // Kamera → oyuncuyu takip et (clamp ile sınırla)
+    onUpdate(() => {
+      const x = clamp(p.pos.x, width()/2, LEVEL_END - width()/2);
+      camPos(vec2(x, height()/2));
+    });
 
     // Hareket
     const SPEED=260, JUMP=520;
@@ -115,7 +128,7 @@
       obj.add([ pos(0,-26), text(t,{size:12}), color(235,235,235), outline(2, rgb(10,10,10)), anchor("center") ]);
     }
 
-    // Toprak (iyileştirir) — ŞEKİL+area aynı nesnede
+    // Toprak (iyileştirir)
     function friend(x,y){
       const f = add([ rect(20,26), pos(x,y), area(), anchor("center"),
                       color(COL.friend), outline(2, COL.ink), "friend" ]);
@@ -145,13 +158,11 @@
       addLabel(e, txt); return e;
     }
 
-    // Coin
+    // Coin & Heart
     function coin(x,y){
       return add([ rect(12,12), pos(x,y), area(), anchor("center"),
                    color(COL.coin), outline(2, COL.ink), "coin" ]);
     }
-
-    // 🔹 Sağlık kalpleri (heal pickups)
     function heart(x,y){
       return add([ rect(14,12), pos(x,y), area(), anchor("center"),
                    color(255,120,120), outline(2, COL.ink), "heart" ]);
@@ -160,17 +171,13 @@
     // Yerleşim
     friend(820,260); friend(1420,260);
     foe_red(360,380); foe_gray(640,340);
-    // 🔹 İki yeni düşman:
     foe_green(900, 340, 70, 100, "Middle-Aged Monster");
     foe_purple(1250, 300, 110, 160, "Octopus-Woman");
 
     coin(260,390); coin(780,280); coin(1180,330); coin(1460,260);
+    heart(600, 330); heart(1280, 280);
 
-    // 🔹 Sağlık kalpleri yerleşimi
-    heart(600, 330);
-    heart(1280, 280);
-
-    // 🔹 Bitiş bayrağı
+    // Finish bayrağı
     const finish = add([
       rect(18, 60), pos(1650, 260), area(),
       color(255,230,120), outline(2, COL.ink), "finish"
