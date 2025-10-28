@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Hale's Data Quest – v5 (camera + visuals)</title>
+  <title>Hale's Data Quest – v6 (characters + camera)</title>
   <style>
     html,body{margin:0;height:100%;background:#0e0f14}
     #game{display:block;width:100vw;height:100vh}
@@ -11,11 +11,12 @@
   </style>
 </head>
 <body>
-  <div class="note">← → hareket • ↑ / Space zıpla • Toprak=❤️ • Düşman=hasar</div>
+  <div class="note">← → hareket • ↑ / Space zıpla • Ally'lere değ = +HP • Düşman = hasar</div>
   <canvas id="game"></canvas>
 
   <script src="kaboom.js"></script>
   <script>
+  // ---- BOOT ----
   const k = kaboom({
     global: true,
     canvas: document.querySelector("#game"),
@@ -27,218 +28,253 @@
   const { add, rect, pos, area, body, color, outline, anchor, text, rgb,
           onKeyDown, onKeyPress, go, scene, shake, destroy, width, height, center, vec2 } = k;
 
-  // renkler
+  // ---- COLORS ----
   const COL = {
-    hair: rgb(95, 60, 25), skin: rgb(255,224,189), shirt: rgb(90,160,255), pants: rgb(40,70,120),
-    player: rgb(255,207,64), ground: rgb(140,160,220), friend: rgb(155,233,168),
-    foeR: rgb(255,98,98), foeG: rgb(120,220,150), foeP: rgb(180,130,255), foeGray: rgb(180,180,200),
-    coin: rgb(255,222,89), ink: rgb(20,25,36)
+    ink: rgb(20,25,36),
+    ground: rgb(140,160,220),
+    coin: rgb(255,222,89),
+    // player
+    hairBrown: rgb(95,60,25), skin: rgb(255,224,189), shirtBlue: rgb(90,160,255), pantsNavy: rgb(40,70,120),
+    // allies
+    hairBlack: rgb(20,20,20), hairBlonde: rgb(245,220,120), shirtGreen: rgb(80,200,160), pantsGray: rgb(130,140,150),
+    shirtPink: rgb(255,140,170),
+    // foes
+    red: rgb(255,98,98), violet: rgb(180,130,255), gray: rgb(180,180,200), green: rgb(90,160,90),
+    // ui
+    white: rgb(255,255,255), cyan: rgb(200,220,255)
   };
 
-  // menü
+  // ---- MENU ----
   scene("menu", () => {
     add([ text("Hale’s Data Quest", { size: 48, align:"center" }),
-          anchor("center"), pos(width()/2, height()/2 - 40), color(255,255,255) ]);
+          anchor("center"), pos(width()/2, height()/2 - 40), color(COL.white) ]);
     add([ text("Press ENTER or CLICK to start", { size: 22, align:"center" }),
-          anchor("center"), pos(width()/2, height()/2 + 20), color(200,220,255) ]);
-    add([ rect(40,60), pos(width()/2 - 150, height()/2 + 100),
-          color(COL.player), outline(3, rgb(30,25,10)) ]);
-    add([ rect(22,22), pos(width()/2 + 110, height()/2 + 110),
-          color(COL.friend), outline(2, COL.ink) ]);
+          anchor("center"), pos(width()/2, height()/2 + 20), color(COL.cyan) ]);
     onKeyPress("enter", () => go("game"));
     onClick(() => go("game"));
   });
 
-  // devriye davranışı
+  // ---- BEHAVIORS ----
   function patrol(speed=80, range=100) {
     let dir = 1; const org = vec2();
     return {
-      id: "patrol", require: ["pos"],
+      id:"patrol", require:["pos"],
       add(){ org.x = this.pos.x; },
-      update(){ this.move(speed*dir, 0); if (Math.abs(this.pos.x - org.x) > range) dir *= -1; }
+      update(){ this.move(speed*dir,0); if (Math.abs(this.pos.x - org.x) > range) dir *= -1; }
     };
   }
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
-  // oyun
+  // ---- GAME ----
   scene("game", () => {
-    if (typeof k.setGravity === "function") k.setGravity(1600);
+    k.setGravity?.(1600);
 
-    // level genişliği (kamerayı sınırlarız)
-    const LEVEL_END = 1750;
+    const LEVEL_END = 1900;
 
     let hp = 5, score = 0;
+    // HUD
+    const hpTxt = add([ text("", {size:24}), color(COL.white), pos(12,12) ]);
+    const scTxt = add([ text("", {size:18}), color(COL.cyan),  pos(12,38) ]);
+    hpTxt.use?.(k.fixed()); scTxt.use?.(k.fixed());
+    const upd = ()=>{ hpTxt.text = "HP: " + "❤".repeat(hp); scTxt.text = "Skor: " + score; }; upd();
 
-    // HUD ekrana sabit
-    const hpTxt = add([ text("", {size:24}), color(255,255,255), pos(12,12) ]);
-    const scTxt = add([ text("", {size:18}), color(180,220,255), pos(12,38) ]);
-    if (typeof k.fixed === "function") { hpTxt.use(k.fixed()); scTxt.use(k.fixed()); }
-    const upd = () => { hpTxt.text = "HP: " + "❤".repeat(hp); scTxt.text = "Skor: " + score; };
-    upd();
-
-    // platformlar
+    // Platforms
     function platform(x,y,w=200,h=24){
       add([ rect(w,h), pos(x,y), area(), body({isStatic:true}), outline(2, COL.ink), color(COL.ground) ]);
     }
-    platform(-40, 500, LEVEL_END + 260, 32);
+    platform(-40, 500, LEVEL_END + 300, 32);
     platform(220, 420, 200, 24);
     platform(520, 360, 180, 24);
-    platform(780, 300, 180, 24);
+    platform(820, 320, 160, 24);
     platform(1120,360, 200, 24);
     platform(1380,300, 180, 24);
+    platform(1650,280, 140, 24);
 
-    // ---- HALE (insan görünüm) ----
-    // hitbox: ana rect; üstüne saç/baş/tişört/pantolon çocukları çiziyoruz
-    const p = add([
-      rect(26,44), pos(60,300), area(), body(),
-      color(COL.shirt), outline(3, rgb(30,25,10)), anchor("center"), "player"
-    ]);
-    // saç (uzun kahverengi)
-    p.add([ pos(0,-16), rect(28,24), anchor("center"), color(COL.hair) ]);
-    p.add([ pos(-10,-4), rect(6,20), color(COL.hair) ]); // sol saç tutamı
-    p.add([ pos( 10,-4), rect(6,20), color(COL.hair) ]); // sağ saç tutamı
+    // ---- PLAYER (Hale: uzun kahverengi saç + tshirt + pantolon) ----
+    const p = add([ rect(26,44), pos(60,300), area(), body(),
+                    color(COL.shirtBlue), outline(3, rgb(30,25,10)), anchor("center"), "player" ]);
+    // saç
+    p.add([ pos(0,-16), rect(28,24), anchor("center"), color(COL.hairBrown) ]);
+    p.add([ pos(-10,-4), rect(6,20), color(COL.hairBrown) ]);
+    p.add([ pos( 10,-4), rect(6,20), color(COL.hairBrown) ]);
     // yüz
     p.add([ pos(0,-10), rect(18,16), anchor("center"), color(COL.skin) ]);
     p.add([ pos(-4,-12), rect(3,3), color(0,0,0) ]);
     p.add([ pos( 4,-12), rect(3,3), color(0,0,0) ]);
-    // tişört (gövde)
-    p.add([ pos(0,4), rect(24,18), anchor("center"), color(COL.shirt) ]);
-    // pantolon
-    p.add([ pos(-6,18), rect(8,12), color(COL.pants) ]);
-    p.add([ pos( 6,18), rect(8,12), color(COL.pants) ]);
+    // tişört ve pantolon
+    p.add([ pos(0,4), rect(24,18), anchor("center"), color(COL.shirtBlue) ]);
+    p.add([ pos(-6,18), rect(8,12), color(COL.pantsNavy) ]);
+    p.add([ pos( 6,18), rect(8,12), color(COL.pantsNavy) ]);
 
-    // KAMERA TAKİBİ — robust
-    const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+    // CAMERA FOLLOW
     onUpdate(() => {
-      const minX = width()/2;
-      const maxX = LEVEL_END - width()/2;
+      const minX = width()/2, maxX = LEVEL_END - width()/2;
       const cx = clamp(p.pos.x, minX, maxX);
-      // Bazı sürümlerde global camPos yerine k.camPos gerekebilir:
-      if (typeof k.camPos === "function") k.camPos(cx, height()/2);
-      else if (typeof camPos === "function") camPos(vec2(cx, height()/2));
+      k.camPos ? k.camPos(cx, height()/2) : camPos(vec2(cx, height()/2));
     });
 
-    // hareket
+    // Movement
     const SPEED=260, JUMP=520;
     onKeyDown("left",  ()=> p.move(-SPEED,0));
     onKeyDown("right", ()=> p.move( SPEED,0));
     function jump(){ if (p.isGrounded()) p.jump(JUMP); }
     onKeyPress("up", jump); onKeyPress("space", jump);
 
-    // düşerse
+    // Fall
     p.onUpdate(()=>{ if (p.pos.y > 900) { damage(1); respawn(); }});
     function respawn(){ p.pos = vec2(60,300); }
     function damage(n=1){ hp -= n; shake(6); if (hp<=0) go("over", score); else upd(); }
     function heal(n=1){ hp = Math.min(5, hp+n); upd(); }
     function gain(n=10){ score += n; upd(); }
 
-    // label helper
-    function addLabel(obj, t){
-      obj.add([ pos(0,-26), text(t,{size:12}), color(235,235,235),
+    // Helpers
+    function labelAbove(obj, t){
+      obj.add([ pos(0,-28), text(t,{size:12}), color(235,235,235),
                 outline(2, rgb(10,10,10)), anchor("center") ]);
     }
 
-    // arkadaş (Toprak)
-    function friend(x,y){
-      const f = add([ rect(20,26), pos(x,y), area(), anchor("center"),
-                      color(COL.friend), outline(2, COL.ink), "friend" ]);
-      addLabel(f, "Toprak ❤️");
-      return f;
+    // ---- ALLIES (iyileştirir, tag: "ally") ----
+    function allyToprak(x,y){
+      const a = add([ rect(18,30), pos(x,y), area(), anchor("center"),
+                      color(COL.shirtGreen), outline(2,COL.ink), "ally" ]);
+      // saç (kahverengi), kafa, tshirt, şort
+      a.add([ pos(0,-14), rect(18,12), anchor("center"), color(COL.hairBrown) ]);
+      a.add([ pos(0,-9), rect(14,10), anchor("center"), color(COL.skin) ]);
+      a.add([ pos(0,0), rect(16,12), anchor("center"), color(COL.shirtGreen) ]);
+      a.add([ pos(0,10), rect(12,8), anchor("center"), color(rgb(60,120,200)) ]);
+      labelAbove(a, "Toprak ❤️"); return a;
+    }
+    function allyHusband(x,y){
+      const a = add([ rect(20,34), pos(x,y), area(), anchor("center"),
+                      color(COL.shirtBlue), outline(2,COL.ink), "ally" ]);
+      a.add([ pos(0,-16), rect(18,12), anchor("center"), color(COL.hairBlack) ]);
+      a.add([ pos(0,-10), rect(14,10), anchor("center"), color(COL.skin) ]);
+      a.add([ pos(0,2), rect(16,12), anchor("center"), color(COL.shirtBlue) ]);
+      a.add([ pos(0,14), rect(12,10), anchor("center"), color(COL.pantsGray) ]);
+      labelAbove(a, "Husband ❤️"); return a;
+    }
+    function allyFriend(x,y){
+      const a = add([ rect(20,34), pos(x,y), area(), anchor("center"),
+                      color(COL.shirtPink), outline(2,COL.ink), "ally" ]);
+      a.add([ pos(0,-16), rect(18,12), anchor("center"), color(COL.hairBlonde) ]);
+      a.add([ pos(0,-10), rect(14,10), anchor("center"), color(COL.skin) ]);
+      a.add([ pos(0,2), rect(16,12), anchor("center"), color(COL.shirtPink) ]);
+      a.add([ pos(0,14), rect(12,10), anchor("center"), color(COL.pantsGray) ]);
+      labelAbove(a, "Friend ❤️"); return a;
     }
 
-    // canavar/dino düşmanlar (basit “piksel-art” şekiller)
-    function foe_dino(x,y,s=80,r=120,txt="Regretourus"){
-      const e = add([ rect(36,24), pos(x,y), area(), anchor("center"),
-                       color(COL.foeGray), outline(2,COL.ink), "foe", patrol(s,r) ]);
-      // kafa
-      e.add([ pos(16,-10), rect(14,12), color(COL.foeGray) ]);
+    // ---- FOES (tag: "foe") ----
+    // 1) ADHD Monster — kırmızı, 8 göz + kocaman ağız ve dişler
+    function foeADHD(x,y,s=120,r=140){
+      const f = add([ rect(36,26), pos(x,y), area(), anchor("center"),
+                      color(COL.red), outline(2,COL.ink), "foe", patrol(s,r) ]);
+      // ağız
+      f.add([ pos(0,4), rect(28,8), anchor("center"), color(0,0,0) ]);
       // dişler
-      e.add([ pos(20,-6), rect(4,2), color(255,255,255) ]);
-      e.add([ pos(24,-6), rect(4,2), color(255,255,255) ]);
-      // kısa kol/bacak
-      e.add([ pos(-10,10), rect(6,6), color(COL.foeGray) ]);
-      e.add([ pos( 12,10), rect(6,6), color(COL.foeGray) ]);
-      addLabel(e, txt); return e;
+      for(let i=-12;i<=12;i+=6){ f.add([ pos(i,2), rect(3,3), color(255,255,255) ]); }
+      // 8 göz (2 sıra)
+      const eyes = [-12,-6,0,6,12];
+      for (const ex of [-12,-6,0,6]) f.add([ pos(ex,-6), rect(3,3), color(255,255,255) ]), f.add([ pos(ex,-6), rect(1,1), color(0,0,0) ]);
+      for (const ex of [-9,-3,3,9])  f.add([ pos(ex,-10), rect(3,3), color(255,255,255) ]), f.add([ pos(ex,-10), rect(1,1), color(0,0,0) ]);
+      labelAbove(f, "ADHD Monster"); return f;
     }
-    function foe_octopus(x,y,s=110,r=160,txt="Octopus-Woman"){
-      const e = add([ rect(26,24), pos(x,y), area(), anchor("center"),
-                       color(COL.foeP), outline(2,COL.ink), "foe", patrol(s,r) ]);
-      // kollar
-      e.add([ pos(-14,10), rect(8,6), color(COL.foeP) ]);
-      e.add([ pos( 14,10), rect(8,6), color(COL.foeP) ]);
-      e.add([ pos(0,12), rect(10,6), color(COL.foeP) ]);
-      addLabel(e, txt); return e;
+    // 2) Regretourus — T-Rex stil: kafa önde, küçük kollar, kuyruk, dişler
+    function foeTrex(x,y,s=90,r=120){
+      const g = add([ rect(44,26), pos(x,y), area(), anchor("center"),
+                      color(COL.green), outline(2,COL.ink), "foe", patrol(s,r) ]);
+      // kafa
+      g.add([ pos(18,-8), rect(16,12), color(COL.green) ]);
+      // dişler
+      for(let i=-4;i<=8;i+=6){ g.add([ pos(20+i,-4), rect(4,2), color(255,255,255) ]); }
+      // küçük kollar
+      g.add([ pos(-8,4), rect(6,4), color(COL.green) ]);
+      g.add([ pos(-2,4), rect(6,4), color(COL.green) ]);
+      // kuyruk
+      g.add([ pos(-20,2), rect(10,6), color(COL.green) ]);
+      labelAbove(g, "Regretourus"); return g;
     }
-    function foe_imp(x,y,s=120,r=140,txt="ADHD Monster"){
-      const e = add([ rect(28,24), pos(x,y), area(), anchor("center"),
-                       color(COL.foeR), outline(2, COL.ink), "foe", patrol(s,r) ]);
-      // kulak/çıkıntı
-      e.add([ pos(-10,-10), rect(6,8), color(COL.foeR) ]);
-      e.add([ pos( 10,-10), rect(6,8), color(COL.foeR) ]);
-      addLabel(e, txt); return e;
+    // 3) Middle-Aged Monster — büyükanne: beyaz topuz, gözlük, uzun elbise, baston
+    function foeGranny(x,y,s=70,r=100){
+      const g = add([ rect(24,36), pos(x,y), area(), anchor("center"),
+                      color(rgb(160,130,200)), outline(2,COL.ink), "foe", patrol(s,r) ]); // elbise
+      // baş + saç
+      g.add([ pos(0,-24), rect(16,12), anchor("center"), color(COL.skin) ]);
+      g.add([ pos(0,-30), rect(14,8), anchor("center"), color(COL.gray) ]); // topuz
+      // gözlük
+      g.add([ pos(-4,-24), rect(6,6), color(COL.gray) ]);
+      g.add([ pos( 4,-24), rect(6,6), color(COL.gray) ]);
+      g.add([ pos(0,-24), rect(2,2), color(COL.gray) ]);
+      // baston
+      g.add([ pos(14,0), rect(3,20), color(rgb(120,80,40)) ]);
+      g.add([ pos(14,10), rect(8,3), color(rgb(120,80,40)) ]);
+      labelAbove(g, "Middle-Aged Monster"); return g;
     }
-    function foe_ogre(x,y,s=70,r=100,txt="Middle-Aged Monster"){
-      const e = add([ rect(26,28), pos(x,y), area(), anchor("center"),
-                       color(COL.foeG), outline(2, COL.ink), "foe", patrol(s,r) ]);
-      e.add([ pos(0,-14), rect(18,10), anchor("center"), color(COL.foeG) ]);
-      e.add([ pos(-5,-16), rect(3,3), color(0,0,0) ]);
-      e.add([ pos( 5,-16), rect(3,3), color(0,0,0) ]);
-      addLabel(e, txt); return e;
+    // 4) Octo-woman — 8 kol + kahverengi saçlı insan kafası
+    function foeOctoWoman(x,y,s=110,r=160){
+      const o = add([ rect(26,28), pos(x,y), area(), anchor("center"),
+                      color(COL.violet), outline(2,COL.ink), "foe", patrol(s,r) ]);
+      // kafa (insan) + saç
+      o.add([ pos(0,-18), rect(16,12), anchor("center"), color(COL.skin) ]);
+      o.add([ pos(0,-22), rect(18,10), anchor("center"), color(COL.hairBrown) ]);
+      // 8 kol
+      const tent = [[-14,10],[-10,12],[-6,14],[ -2,12],[ 2,12],[6,14],[10,12],[14,10]];
+      for (const [tx,ty] of tent) o.add([ pos(tx,ty), rect(8,6), color(COL.violet) ]);
+      labelAbove(o, "Octo-woman"); return o;
     }
 
-    // coin & heart
-    function coin(x,y){ return add([ rect(12,12), pos(x,y), area(), anchor("center"),
-                                     color(COL.coin), outline(2, COL.ink), "coin" ]); }
-    function heart(x,y){ return add([ rect(14,12), pos(x,y), area(), anchor("center"),
-                                      color(255,120,120), outline(2, COL.ink), "heart" ]); }
+    // Coins & Hearts (opsiyonel skor + heal)
+    function coin(x,y){ return add([ rect(12,12), pos(x,y), area(), anchor("center"), color(COL.coin), outline(2,COL.ink), "coin" ]); }
+    function heart(x,y){ return add([ rect(14,12), pos(x,y), area(), anchor("center"), color(255,120,120), outline(2,COL.ink), "heart" ]); }
 
-    // yerleşim
-    friend(820,260); friend(1420,260);
+    // ---- PLACEMENT ----
+    allyToprak(820,280);
+    allyHusband(1180,340);
+    allyFriend(1480,260);
 
-    foe_imp(360,380,120,140,"ADHD Monster");
-    foe_dino(640,340,90,120,"Regretourus");
-    foe_ogre(900,340,70,100,"Middle-Aged Monster");
-    foe_octopus(1250,300,110,160,"Octopus-Woman");
+    foeADHD(360,380);
+    foeTrex(640,340);
+    foeGranny(900,340);
+    foeOctoWoman(1250,300);
 
-    coin(260,390); coin(780,280); coin(1180,330); coin(1460,260);
-    heart(600,330); heart(1280,280);
+    coin(260,390); coin(780,280); coin(1120,330); coin(1460,260);
+    heart(600,330); heart(1380,260);
 
-    // finish
-    add([ rect(18, 60), pos(1650, 260), area(),
-          color(255,230,120), outline(2, COL.ink), "finish" ]);
+    // Finish = laptop (ekranda kod satırları)
+    const laptop = add([ rect(60,36), pos(1750,262), area(), anchor("center"),
+                         color(rgb(60,70,80)), outline(2,COL.ink), "finish" ]);
+    // ekran
+    laptop.add([ pos(0,-10), rect(52,20), anchor("center"), color(rgb(15,20,28)) ]);
+    // kod satırları
+    for(let y=-12; y<=-4; y+=4){
+      laptop.add([ pos(-20,y), rect(36,1), color(rgb(120,220,160)) ]);
+    }
+    // klavye
+    laptop.add([ pos(0,10), rect(56,6), anchor("center"), color(rgb(80,90,100)) ]);
 
-    // çarpışmalar
-    p.onCollide("friend", (f)=>{ heal(1); destroy(f); });
-    p.onCollide("foe",    ()=>{ damage(1); });
-    p.onCollide("coin",   (c)=>{ gain(10); destroy(c); });
-    p.onCollide("heart",  (h)=>{ heal(1); destroy(h); });
-    p.onCollide("finish", ()=>{ go("win", score); });
+    // ---- COLLISIONS ----
+    p.onCollide("ally",  (a)=>{ heal(1); destroy(a); });
+    p.onCollide("foe",   ()=>{ damage(1); });
+    p.onCollide("coin",  (c)=>{ gain(10); destroy(c); });
+    p.onCollide("heart", (h)=>{ heal(1); destroy(h); });
+    p.onCollide("finish",()=>{ go("win", score); });
   });
 
-  // game over
+  // ---- SCENES: OVER / WIN ----
   scene("over", (score=0) => {
-    add([ text("Oyun Bitti", { size: 42, align:"center" }),
-          anchor("center"), pos(width()/2, height()/2 - 40), color(255,255,255) ]);
-    add([ text("Skor: " + score, { size: 28, align:"center" }),
-          anchor("center"), pos(width()/2, height()/2), color(200,220,255) ]);
-    add([ text("May the Data be with You ✨", { size: 22, align:"center" }),
-          anchor("center"), pos(width()/2, height()/2 + 40), color(255,255,255) ]);
-    add([ text("[R] Restart   |   [M] Menu", { size: 16, align:"center" }),
-          anchor("center"), pos(width()/2, height()/2 + 88), color(200,200,200) ]);
+    add([ text("Oyun Bitti", { size: 42, align:"center" }), anchor("center"), pos(width()/2, height()/2 - 40), color(COL.white) ]);
+    add([ text("Skor: " + score, { size: 28, align:"center" }), anchor("center"), pos(width()/2, height()/2), color(COL.cyan) ]);
+    add([ text("May the Data be with You ✨", { size: 22, align:"center" }), anchor("center"), pos(width()/2, height()/2 + 40), color(COL.white) ]);
+    add([ text("[R] Restart   |   [M] Menu", { size: 16, align:"center" }), anchor("center"), pos(width()/2, height()/2 + 88), color(rgb(200,200,200)) ]);
     onKeyPress("r", ()=> go("game"));
     onKeyPress("m", ()=> go("menu"));
     onClick(()=> go("game"));
   });
 
-  // win
   scene("win", (score=0) => {
-    add([ text("Mission Complete!", { size: 42, align: "center" }),
-          anchor("center"), pos(width()/2, height()/2 - 40), color(255,255,255) ]);
-    add([ text("Skor: " + score, { size: 28, align: "center" }),
-          anchor("center"), pos(width()/2, height()/2), color(200,220,255) ]);
-    add([ text("May the Data be with You ✨", { size: 22, align: "center" }),
-          anchor("center"), pos(width()/2, height()/2 + 40), color(255,255,255) ]);
-    add([ text("[R] Restart   |   [M] Menu", { size: 16, align: "center" }),
-          anchor("center"), pos(width()/2, height()/2 + 88), color(200,200,200) ]);
+    add([ text("Mission Complete!", { size: 42, align:"center" }), anchor("center"), pos(width()/2, height()/2 - 40), color(COL.white) ]);
+    add([ text("Skor: " + score, { size: 28, align:"center" }), anchor("center"), pos(width()/2, height()/2), color(COL.cyan) ]);
+    add([ text("May the Data be with You ✨", { size: 22, align:"center" }), anchor("center"), pos(width()/2, height()/2 + 40), color(COL.white) ]);
+    add([ text("[R] Restart   |   [M] Menu", { size: 16, align:"center" }), anchor("center"), pos(width()/2, height()/2 + 88), color(rgb(200,200,200)) ]);
     onKeyPress("r", ()=> go("game"));
     onKeyPress("m", ()=> go("menu"));
     onClick(()=> go("game"));
