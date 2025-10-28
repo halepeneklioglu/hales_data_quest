@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Hale's Data Quest (CORS-safe)</title>
+  <style>
+    html,body{margin:0;height:100%;background:#0e0f14}
+    #game{display:block;width:100vw;height:100vh}
+    .note{position:fixed;top:8px;left:8px;color:#9be9a8;font-family:ui-sans-serif,system-ui;-apple-system;font-size:14px;opacity:.9}
+  </style>
+</head>
+<body>
+  <div class="note">Yön: ← → | Zıpla: ↑ / Space — Toprak = ❤️ | Düşman = hasar</div>
+  <canvas id="game"></canvas>
+
+  <!-- KLASİK (UMD) SÜRÜM: module DEĞİL → CORS yok -->
+  <script src="https://unpkg.com/kaboom@3001.0.1/dist/kaboom.js"></script>
+  <script>
+    // Kaboom'u GLOBAL kullan: gravity(), add() vb. fonksiyonlar tanımlı olur
+    kaboom({
+      global: true,
+      canvas: document.querySelector("#game"),
+      width: 960,
+      height: 540,
+      background: [14,15,20],
+      letterbox: true,
+    });
+
+    // ------ STATE ------
+    let hp = 5, score = 0;
+
+    // ------ UI ------
+    const ui = add([pos(12,12), fixed()]);
+    const hpText   = ui.add([text("", {size:28}), color(255,255,255)]);
+    const scoreTxt = ui.add([pos(0,34), text("", {size:22}), color(180,220,255)]);
+    function updateUI(){ hpText.text = "HP: " + "❤".repeat(hp); scoreTxt.text = "Skor: " + score; }
+    updateUI();
+
+    // ------ COLORS ------
+    const COLS = {
+      player: rgb(255,207,64), ground: rgb(140,160,220),
+      friend: rgb(155,233,168), foe: rgb(255,98,98),
+      boost: rgb(116,201,255), coin: rgb(255,222,89),
+      ink: rgb(20,25,36), gray: rgb(180,180,200),
+      purple: rgb(180,130,255), green: rgb(120,220,150),
+    };
+
+    gravity(1600);
+
+    // ------ WORLD ------
+    function platform(x,y,w=200,h=24){
+      return add([rect(w,h), pos(x,y), area(), body({isStatic:true}), outline(2,COLS.ink), color(COLS.ground), "platform"]);
+    }
+    const floorY = 500;
+    platform(-40,floorY, 2200,32);
+    platform(220,420,200,24);
+    platform(520,360,180,24);
+    platform(780,300,180,24);
+    platform(1120,360,200,24);
+    platform(1380,300,180,24);
+
+    // Oyuncu
+    const player = add([rect(28,40), pos(60,300), area(), body(), color(COLS.player), outline(3, rgb(30,25,10)), anchor("center"), "player"]);
+    player.add([pos(-6,-5), rect(6,6), color(0,0,0)]);
+    player.add([pos(6,-5),  rect(6,6), color(0,0,0)]);
+
+    const SPEED=260, JUMP=520;
+    onKeyDown("left",  ()=>player.move(-SPEED,0));
+    onKeyDown("right", ()=>player.move( SPEED,0));
+    function doJump(){ if(player.isGrounded()) player.jump(JUMP); }
+    onKeyPress("up", doJump); onKeyPress("space", doJump);
+
+    player.onUpdate(()=>{ if(player.pos.y>900){ damage(1); respawn(); }});
+    function respawn(){ player.pos = vec2(60,300); }
+    function damage(n=1){ hp -= n; shake(8); (hp<=0) ? go("over") : updateUI(); }
+    function heal(n=1){ hp = Math.min(5, hp+n); updateUI(); play("power",{volume:.4}); }
+    function gain(p=10){ score += p; updateUI(); }
+
+    function label(t,size=14){ return [text(t,{size}), color(230,230,230), outline(2, rgb(10,10,10)), anchor("center"), pos(0,-26)]; }
+
+    // ------ ENTITIES ------
+    // Dost: Toprak
+    function toprak(x,y){
+      const f = add([pos(x,y), area(), anchor("center"), "friend"]);
+      f.add([rect(20,26), color(COLS.friend), outline(2,COLS.ink), anchor("center")]);
+      f.add([pos(0,-22), rect(18,12), color(COLS.friend), outline(2,COLS.ink), anchor("center")]);
+      f.add(label("Toprak ❤️"));
+    }
+
+    // devriye davranışı
+    function patrol(speed=80, range=100){
+      let dir=1; const origin=vec2();
+      return { id:"patrol", require:["pos"],
+        add(){ origin.x = this.pos.x; },
+        update(){ this.move(speed*dir,0); if(Math.abs(this.pos.x-origin.x)>range) dir *= -1; }
+      };
+    }
+
+    // Düşmanlar (etiketleri "foe")
+    function adhdMonster(x,y){ const e=add([pos(x,y), area(), anchor("center"), "foe", patrol(120,140)]); e.add([rect(28,24), color(COLS.foe), outline(2,COLS.ink), anchor("center")]); e.add(label("ADHD Monster")); }
+    function regreTaurus(x,y){ const e=add([pos(x,y), area(), anchor("center"), "foe", patrol(90,120)]);  e.add([rect(34,22), color(COLS.gray), outline(2,COLS.ink), anchor("center")]); e.add([pos(-18,-8), rect(14,6), color(COLS.gray)]); e.add(label("Regretourus")); }
+    function middleAgedMonster(x,y){ const e=add([pos(x,y), area(), anchor("center"), "foe", patrol(60,90)]);   e.add([rect(26,24), color(COLS.green), outline(2,COLS.ink), anchor("center")]); e.add(label("Middle-Aged Monster")); }
+    function octoWoman(x,y){ const e=add([pos(x,y), area(), anchor("center"), "foe", patrol(100,160)]); e.add([circle(14), color(COLS.purple), outline(2,COLS.ink), anchor("center")]); for(let i=0;i<4;i++) e.add([pos(-14+i*9,10), rect(6,10), color(COLS.purple)]); e.add(label("Octopus-Woman")); }
+
+    function boost(x,y){ add([pos(x,y), area({shape:new Polygon([vec2(-10,10), vec2(0,-10), vec2(10,10)])}), color(COLS.boost), outline(2,COLS.ink), anchor("center"), "boost", text("İlham",{size:12})]); }
+    function coin(x,y){  add([pos(x,y), area({shape:new Ellipse(8,8)}), color(COLS.coin), outline(2,COLS.ink), anchor("center"), "coin"]); }
+
+    // Yerleşim
+    toprak(820,260); toprak(1420,260);
+    adhdMonster(360,380); regreTaurus(640,340); middleAgedMonster(1120,340); octoWoman(1380,280);
+    boost(540,330);
+    coin(260,390); coin(780,280); coin(1180,330); coin(1460,260);
+
+    // Çarpışmalar
+    player.onCollide("friend", (f)=>{ heal(1); destroy(f); flash(player.pos); });
+    player.onCollide("foe",    (e)=>{ damage(1); hit(e.pos); });
+    player.onCollide("boost",  (b)=>{ gain(20); destroy(b); flash(player.pos); });
+    player.onCollide("coin",   (c)=>{ gain(10); destroy(c); flash(c.pos); });
+
+    function flash(p){ add([pos(p), circle(12), color(255,255,255), opacity(1), lifespan(.25,{fade:.3})]); }
+    function hit(p){   add([pos(p), rect(20,20), color(255,180,180), opacity(1), lifespan(.2,{fade:.3})]); }
+
+    loadSound("power", "https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg");
+
+    scene("over", ()=>{
+      add([ text("Oyun Bitti\nSkor: "+score+"\nMay the Data be with You ✨\n[R ile yeniden başla]", {size:32, align:"center"}), anchor("center"), pos(center()), color(255,255,255) ]);
+      onKeyPress("r", ()=>window.location.reload());
+    });
+  </script>
+</body>
+</html>
