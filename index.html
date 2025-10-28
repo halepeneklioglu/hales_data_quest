@@ -17,16 +17,15 @@
   <script src="kaboom.js"></script>
   <script>
   // ---------- KABOOM BOOT ----------
-     const k = kaboom({
+  const k = kaboom({
   global: true,
   canvas: document.querySelector("#game"),
   width: 960,
   height: 540,
   background: [14,15,20],
   letterbox: true,
-});
-const { gravity, add, rect, pos, area, body, color, outline, anchor, text, rgb, onKeyDown, onKeyPress, go, scene, shake, destroy, every, width, height, center, vec2 } = k;
-
+  });
+  const { gravity, add, rect, pos, area, body, color, outline, anchor, text, rgb, onKeyDown, onKeyPress, go, scene, shake, destroy, every, width, height, center, vec2 } = k;
 
   // ---------- RENKLER ----------
   const COL = {
@@ -154,4 +153,5 @@ const { gravity, add, rect, pos, area, body, color, outline, anchor, text, rgb, 
   </script>
 </body>
 </html>
+
 
