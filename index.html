@@ -2,23 +2,50 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Hale's Data Quest – v8 (anim + parallax + sfx)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <title>Hale's Data Quest – v9 (mobile)</title>
   <style>
-    html,body{margin:0;height:100%;background:#0e0f14}
+    html,body{margin:0;height:100%;background:#0e0f14;touch-action:none}
     #game{display:block;width:100vw;height:100vh}
-    .note{position:fixed;top:8px;left:8px;color:#9be9a8;font:14px/1.2 system-ui}
+    .note{position:fixed;top:8px;left:8px;color:#9be9a8;font:14px/1.2 system-ui;user-select:none}
+    /* Mobile controls */
+    .controls{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-between;gap:12px;padding:12px;pointer-events:auto}
+    .cluster{display:flex;gap:12px}
+    .btn{
+      width:64px;height:64px;border-radius:12px;background:rgba(255,255,255,.08);
+      border:1px solid rgba(255,255,255,.2);backdrop-filter:blur(4px);
+      color:#e4f2ff;font:14px/1 system-ui;display:flex;align-items:center;justify-content:center;
+      user-select:none;touch-action:none;
+    }
+    .btn:active{transform:scale(.98);background:rgba(255,255,255,.12)}
+    /* daha küçük cihazlar */
+    @media (max-width: 420px){
+      .btn{width:56px;height:56px}
+      .note{font-size:12px}
+    }
   </style>
 </head>
 <body>
-  <div class="note">← → hareket • ↑/Space zıpla • Ally=+HP • Düşman=hasar • Hedef: 💻</div>
+  <div class="note">← → / ⬅️➡️ • ↑/Space / ⤴️ Zıpla • Ally=+HP • Düşman=hasar • Hedef: 💻</div>
   <canvas id="game"></canvas>
+
+  <!-- Mobile on-screen controls -->
+  <div class="controls" id="controls" aria-label="Game controls">
+    <div class="cluster">
+      <div class="btn" id="btnLeft">⬅️</div>
+      <div class="btn" id="btnRight">➡️</div>
+    </div>
+    <div class="cluster">
+      <div class="btn" id="btnJump">⤴️</div>
+    </div>
+  </div>
 
   <script src="kaboom.js"></script>
   <script>
   const k = kaboom({
     global: true,
     canvas: document.querySelector("#game"),
+    // sabit bir “sahne çözünürlüğü”; letterbox mobilde otomatik ölçekler
     width: 960,
     height: 540,
     background: [14,15,20],
@@ -27,10 +54,32 @@
   const { add, rect, pos, area, body, color, outline, anchor, text, rgb,
           onKeyDown, onKeyPress, go, scene, shake, destroy, width, height, vec2 } = k;
 
-  // -------- COLORS --------
+  // ---- Mobile input flags ----
+  const mobile = {
+    left:false, right:false, jump:false,
+  };
+  // Buton yardımcıları (çoklu dokunma güvenli)
+  function bindHold(btn, key){
+    const set = (v)=>{ mobile[key]=v; };
+    const start = (e)=>{ e.preventDefault(); set(true); ensureAudio(); };
+    const endAll = (e)=>{ e.preventDefault(); set(false); };
+    btn.addEventListener("pointerdown", start);
+    window.addEventListener("pointerup", endAll);
+    window.addEventListener("pointercancel", endAll);
+    // parmak sürükleyip butondan çıkarsa:
+    btn.addEventListener("pointerleave", (e)=>{ if(e.pressure===0) set(false); });
+  }
+  bindHold(document.getElementById("btnLeft"),  "left");
+  bindHold(document.getElementById("btnRight"), "right");
+  // Jump tek-seferlik değil: basılı tutmak sorun olmaz; biz “grounded ise zıpla” kontrolü koyacağız.
+  bindHold(document.getElementById("btnJump"), "jump");
+
+  // Küçük ekranlar için parallax sadeleştirme
+  const IS_SMALL = Math.min(window.innerWidth, window.innerHeight) < 540;
+
+  // ---------- COLORS ----------
   const COL = {
     ink: rgb(20,25,36),
-    sky: rgb(12,14,18),
     cityFar: rgb(40,48,70),
     cityNear: rgb(60,70,100),
     ground: rgb(140,160,220),
@@ -42,7 +91,7 @@
     white: rgb(255,255,255), cyan: rgb(200,220,255)
   };
 
-  // -------- WebAudio SFX --------
+  // ---------- WebAudio SFX ----------
   let AC, unlocked = false;
   function ensureAudio(){ if(!AC) AC = new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==="suspended") AC.resume(); unlocked = true; }
   function beep(freq=440, dur=0.08, type="square", vol=0.15, when=0){
@@ -63,28 +112,27 @@
   window.addEventListener("pointerdown", ensureAudio, { once:true });
   window.addEventListener("keydown", ensureAudio, { once:true });
 
-  // -------- MENU --------
+  // ---------- MENU ----------
   scene("menu", () => {
     add([ text("Hale’s Data Quest", { size: 48, align:"center" }),
           anchor("center"), pos(width()/2, height()/2 - 40), color(COL.white) ]);
-    add([ text("Press ENTER or CLICK to start", { size: 22, align:"center" }),
+    add([ text("Tap/Enter → Start", { size: 22, align:"center" }),
           anchor("center"), pos(width()/2, height()/2 + 20), color(COL.cyan) ]);
     onKeyPress("enter", ()=>{ ensureAudio(); go("game"); });
     onClick(()=>{ ensureAudio(); go("game"); });
   });
 
-  // -------- HELPERS --------
+  // ---------- BEHAVIOR ----------
   function patrol(speed=80, range=100){
     let dir=1; const org=vec2();
-    return {
-      id:"patrol", require:["pos"],
-      add(){ org.x = this.pos.x; },
-      update(){ this.move(speed*dir,0); if (Math.abs(this.pos.x - org.x) > range) dir *= -1; }
+    return { id:"patrol", require:["pos"],
+      add(){ org.x=this.pos.x; },
+      update(){ this.move(speed*dir,0); if(Math.abs(this.pos.x-org.x)>range) dir*=-1; }
     };
   }
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
-  // -------- GAME --------
+  // ---------- GAME ----------
   scene("game", () => {
     k.setGravity?.(1600);
     const LEVEL_END = 1950;
@@ -96,7 +144,7 @@
     hpTxt.use?.(k.fixed()); scTxt.use?.(k.fixed());
     const upd = ()=>{ hpTxt.text="HP: "+"❤".repeat(hp); scTxt.text="Skor: "+score; }; upd();
 
-    // ----- PARALLAX -----
+    // ----- PARALLAX (küçük ekranda daha az bina) -----
     const farGroup=[], nearGroup=[];
     function addBuildings(group, yBase, count, wMin, wMax, hMin, hMax, col){
       let x=-200;
@@ -107,8 +155,8 @@
         group.push({node:b, baseX:x}); x += w+30;
       }
     }
-    addBuildings(farGroup, 520, 18, 70,140, 80,160, COL.cityFar);
-    addBuildings(nearGroup,540, 16, 80,160,120,220, COL.cityNear);
+    addBuildings(farGroup, 520, IS_SMALL? 10:18, 70,140, 80,160, COL.cityFar);
+    addBuildings(nearGroup,540, IS_SMALL? 9:16, 80,160,120,220, COL.cityNear);
 
     function updateParallax(){
       const worldLeft = camX - width()/2;
@@ -135,7 +183,7 @@
     p.add([ pos(-6,18), rect(8,12), color(COL.pantsNavy) ]);
     p.add([ pos( 6,18), rect(8,12), color(COL.pantsNavy) ]);
 
-    // Kamera + zaman
+    // Zaman + Kamera
     k.onUpdate(()=>{ t += 1/60; });
     onUpdate(() => {
       const minX=width()/2, maxX=LEVEL_END - width()/2;
@@ -144,14 +192,21 @@
       updateParallax();
     });
 
-    // Movement
+    // Hareket (klavye + mobil)
     const SPEED=260, JUMP=520;
     onKeyDown("left", ()=>p.move(-SPEED,0));
     onKeyDown("right",()=>p.move( SPEED,0));
-    function jump(){ if(p.isGrounded()){ p.jump(JUMP); sfx.jump(); } }
-    onKeyPress("up", jump); onKeyPress("space", jump);
+    function doJump(){ if(p.isGrounded()){ p.jump(JUMP); sfx.jump(); } }
+    onKeyPress("up", doJump); onKeyPress("space", doJump);
 
-    // Fall / HP
+    // Mobil: sürekli tarama
+    k.onUpdate(()=>{
+      if(mobile.left && !mobile.right)  p.move(-SPEED,0);
+      if(mobile.right && !mobile.left)  p.move( SPEED,0);
+      if(mobile.jump) { doJump(); mobile.jump=false; } // “tek tetik”
+    });
+
+    // Düşüş/HP
     p.onUpdate(()=>{ if(p.pos.y>900){ sfx.hit(); damage(1); respawn(); }});
     function respawn(){ p.pos=vec2(60,300); }
     function damage(n=1){ hp-=n; shake(6); if(hp<=0){ sfx.gameOver(); go("over",score); } else upd(); }
@@ -159,13 +214,9 @@
     function gain(n=10){ score+=n; upd(); }
 
     function labelAbove(obj,txt){ obj.add([ pos(0,-28), text(txt,{size:12}), color(235,235,235), outline(2, rgb(10,10,10)), anchor("center") ]); }
+    function addBob(node, amp=2, spd=2, phase=0){ node.onUpdate(()=>{ node.pos.y += Math.sin((t+phase)*spd)*0.2; }); }
 
-    // ----- Allies (bob animasyonu) -----
-    function addBob(node, amp=2, spd=2, phase=0){
-      node.onUpdate(()=>{
-        node.pos.y += Math.sin((t+phase)*spd)*0.2; // minik titreşim
-      });
-    }
+    // Allies
     function allyToprak(x,y){
       const a=add([ rect(18,30), pos(x,y), area(), anchor("center"), color(COL.shirtGreen), outline(2,COL.ink), "ally" ]);
       a.add([ pos(0,-14), rect(18,12), anchor("center"), color(COL.hairBrown) ]);
@@ -197,24 +248,17 @@
       labelAbove(a,"Friend ❤️"); addBob(a,2,1.8,0.1); return a;
     }
 
-    // ----- FOES + anim -----
+    // Foes
     function foeADHD(x,y,s=140,r=160){
       const f=add([ rect(40,28), pos(x,y), area(), anchor("center"), color(COL.red), outline(2,COL.ink), "foe", patrol(s,r) ]);
-      // mouth
+      const pupils=[]; const row=[-12,-4,4,12];
       const mouth = f.add([ pos(0,4), rect(30,9), anchor("center"), color(0,0,0) ]);
       for(let i=-12;i<=12;i+=6){ f.add([ pos(i,2), rect(3,3), color(255,255,255) ]); }
-      // 8 eyes (pupils blink)
-      const pupils=[];
-      const row=[-12,-4,4,12];
       row.forEach(ex=>{ f.add([ pos(ex,-8), rect(3,3), color(255,255,255) ]); pupils.push(f.add([ pos(ex,-8), rect(1,1), color(0,0,0) ])); });
       row.forEach(ex=>{ f.add([ pos(ex,-12),rect(3,3), color(255,255,255) ]); pupils.push(f.add([ pos(ex,-12),rect(1,1), color(0,0,0) ])); });
       f.add([ pos(-14,-14), rect(4,6), color(COL.red) ]); f.add([ pos(14,-14), rect(4,6), color(COL.red) ]);
       labelAbove(f,"ADHD Monster");
-      // blink anim
-      f.onUpdate(()=>{
-        const phase = Math.sin(t*6);
-        pupils.forEach((p,i)=>{ p.hidden = (Math.sin(t*6 + i*0.6) > 0.7); });
-      });
+      f.onUpdate(()=>{ pupils.forEach((p,i)=>{ p.hidden = (Math.sin(t*6 + i*0.6) > 0.7); }); });
       return f;
     }
     function foeTrex(x,y,s=90,r=130){
@@ -227,8 +271,7 @@
       g.add([ pos(-8,10), rect(6,6), color(COL.green) ]);
       g.add([ pos( 8,10), rect(6,6), color(COL.green) ]);
       g.add([ pos(-22,2), rect(12,6), color(COL.green) ]);
-      labelAbove(g,"Regretourus");
-      return g;
+      labelAbove(g,"Regretourus"); return g;
     }
     function foeGranny(x,y,s=70,r=110){
       const g=add([ rect(24,38), pos(x,y), area(), anchor("center"), color(rgb(160,130,200)), outline(2,COL.ink), "foe", patrol(s,r) ]);
@@ -242,12 +285,7 @@
       const caneVert = g.add([ pos(14,0),  rect(3,22), color(rgb(120,80,40)) ]);
       const caneHor  = g.add([ pos(16,10), rect(8,3),  color(rgb(120,80,40)) ]);
       labelAbove(g,"Middle-Aged Monster");
-      // cane swing
-      g.onUpdate(()=>{
-        const sway = Math.sin(t*2.5)*2;
-        caneVert.pos.x = 14 + sway*0.3;
-        caneHor.pos.x  = 16 + sway;
-      });
+      g.onUpdate(()=>{ const sway=Math.sin(t*2.5)*2; caneVert.pos.x=14+sway*0.3; caneHor.pos.x=16+sway; });
       return g;
     }
     function foeOctoWoman(x,y,s=110,r=170){
@@ -259,48 +297,32 @@
       const tentPos=[[-16,10],[-12,12],[-8,14],[-4,12],[4,12],[8,14],[12,12],[16,10]];
       const arms = tentPos.map(([tx,ty],i)=> o.add([ pos(tx,ty), rect(8,6), color(COL.violet) ]));
       labelAbove(o,"Octo-woman");
-      // tentacle wiggle
-      o.onUpdate(()=>{
-        arms.forEach((a,i)=>{
-          a.pos.y = tentPos[i][1] + Math.sin(t*3 + i*0.5)*1.5;
-        });
-      });
+      o.onUpdate(()=>{ arms.forEach((a,i)=>{ a.pos.y = tentPos[i][1] + Math.sin(t*3 + i*0.5)*1.5; }); });
       return o;
     }
 
-    // Coin/Heart with pulse
+    // Coin/Heart (pulse)
     function pulse(node, base=1, amp=0.08, spd=3, phase=0){
       node.scale = vec2(1,1);
-      node.onUpdate(()=> {
-        const s = base + Math.sin((t+phase)*spd)*amp;
-        node.scale = vec2(s,s);
-      });
+      node.onUpdate(()=>{ const s = base + Math.sin((t+phase)*spd)*amp; node.scale = vec2(s,s); });
     }
     function coin(x,y){ const c=add([ rect(12,12), pos(x,y), area(), anchor("center"), color(COL.coin), outline(2, COL.ink), "coin" ]); pulse(c,1,0.12,4,Math.random()); return c; }
     function heart(x,y){ const h=add([ rect(14,12), pos(x,y), area(), anchor("center"), color(255,120,120), outline(2, COL.ink), "heart" ]); pulse(h,1,0.1,3.2,Math.random()); return h; }
 
-    // Placement
+    // Yerleşim
     allyToprak(820,280); allyHusband(1180,340); allyFriend(1480,260);
     foeADHD(360,380); foeTrex(640,340); foeGranny(900,340); foeOctoWoman(1250,300);
     coin(260,390); coin(780,280); coin(1120,330); coin(1460,260);
     heart(600,330); heart(1380,260);
 
-    // Finish = laptop with flicker
+    // Finish = laptop
     const laptop = add([ rect(60,36), pos(1750,262), area(), anchor("center"), color(rgb(60,70,80)), outline(2,COL.ink), "finish" ]);
     const screen = laptop.add([ pos(0,-10), rect(52,20), anchor("center"), color(rgb(15,20,28)) ]);
-    const codeLines = [];
-    for(let y=-12;y<=-4;y+=4){ codeLines.push(laptop.add([ pos(-20,y), rect(36,1), color(rgb(120,220,160)) ])); }
+    const codeLines = []; for(let y=-12;y<=-4;y+=4){ codeLines.push(laptop.add([ pos(-20,y), rect(36,1), color(rgb(120,220,160)) ])); }
     laptop.add([ pos(0,10), rect(56,6), anchor("center"), color(rgb(80,90,100)) ]);
-    laptop.onUpdate(()=>{
-      // satır uzunluklarını minik değiştir
-      codeLines.forEach((ln,i)=>{
-        const w = 30 + Math.floor((Math.sin(t*3 + i)*3) + 6);
-        // rect boyutu runtime'da değişmiyor; hile: scale X ile oyna
-        ln.scale = vec2(w/36, 1);
-      });
-    });
+    laptop.onUpdate(()=>{ codeLines.forEach((ln,i)=>{ const w = 30 + Math.floor((Math.sin(t*3 + i)*3) + 6); ln.scale = vec2(w/36,1); }); });
 
-    // Collisions
+    // Çarpışmalar
     p.onCollide("ally",(a)=>{ heal(1); destroy(a); });
     p.onCollide("foe", ()=>{ sfx.hit(); damage(1); });
     p.onCollide("coin",(c)=>{ gain(10); destroy(c); sfx.coin(); });
@@ -308,7 +330,7 @@
     p.onCollide("finish",()=>{ sfx.win(); go("win",score); });
   });
 
-  // -------- OVER / WIN --------
+  // ---------- OVER / WIN ----------
   scene("over",(score=0)=>{
     add([ text("Oyun Bitti", { size: 42, align:"center" }), anchor("center"), pos(width()/2, height()/2 - 40), color(COL.white) ]);
     add([ text("Skor: "+score, { size: 28, align:"center" }), anchor("center"), pos(width()/2, height()/2), color(COL.cyan) ]);
