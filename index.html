@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,orientation=landscape"/>
   <title>Hale's Data Quest – v9 (mobile)</title>
   <style>
     html,body{margin:0;height:100%;background:#0e0f14;touch-action:none}
@@ -23,9 +23,21 @@
       .btn{width:56px;height:56px}
       .note{font-size:12px}
     }
+    /* Orientation prompt */
+    #orientationPrompt {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: #0e0f14; color: #e4f2ff; font: 18px/1.5 system-ui;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; z-index: 1000; display: none;
+    }
+    #orientationPrompt.show { display: flex; }
   </style>
 </head>
 <body>
+  <div id="orientationPrompt">
+    <p>Please rotate your device to landscape for the best experience.</p>
+    <p>⤴️ Rotate to play!</p>
+  </div>
   <div class="note">← → / ⬅️➡️ • ↑/Space / ⤴️ Zıpla • Ally=+HP • Düşman=hasar • Hedef: 💻</div>
   <canvas id="game"></canvas>
 
@@ -42,6 +54,19 @@
 
   <script src="kaboom.js"></script>
   <script>
+  // Orientation check
+  const promptEl = document.getElementById('orientationPrompt');
+  function checkOrientation() {
+    const isLandscape = window.innerWidth > window.innerHeight || screen.orientation?.type?.startsWith('landscape');
+    promptEl.classList.toggle('show', !isLandscape);
+    document.getElementById('game').style.display = isLandscape ? 'block' : 'none';
+    document.getElementById('controls').style.display = isLandscape ? 'flex' : 'none';
+    document.querySelector('.note').style.display = isLandscape ? 'block' : 'none';
+  }
+  window.addEventListener('resize', checkOrientation);
+  window.addEventListener('orientationchange', checkOrientation);
+  checkOrientation(); // Initial check
+
   const k = kaboom({
     global: true,
     canvas: document.querySelector("#game"),
@@ -99,7 +124,8 @@
     const t = AC.currentTime + (when||0);
     const o = AC.createOscillator(), g = AC.createGain();
     o.type = type; o.frequency.setValueAtTime(freq, t);
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
     o.connect(g).connect(AC.destination); o.start(t); o.stop(t+dur);
   }
   const sfx = {
@@ -220,7 +246,7 @@
     function allyToprak(x,y){
       const a=add([ rect(18,30), pos(x,y), area(), anchor("center"), color(COL.shirtGreen), outline(2,COL.ink), "ally" ]);
       a.add([ pos(0,-14), rect(18,12), anchor("center"), color(COL.hairBrown) ]);
-      a.add([ pos(0,-9),  rect(14,10), anchor("center"), color(COL.skin) ]);
+      a.add([ pos(0,-9),  rect(14,10), anchor("center", color(COL.skin) ]);
       a.add([ pos(-3,-10), rect(2,2), color(0,0,0) ]);
       a.add([ pos( 3,-10), rect(2,2), color(0,0,0) ]);
       a.add([ pos(0,0), rect(16,12), anchor("center"), color(COL.shirtGreen) ]);
@@ -307,7 +333,7 @@
       node.onUpdate(()=>{ const s = base + Math.sin((t+phase)*spd)*amp; node.scale = vec2(s,s); });
     }
     function coin(x,y){ const c=add([ rect(12,12), pos(x,y), area(), anchor("center"), color(COL.coin), outline(2, COL.ink), "coin" ]); pulse(c,1,0.12,4,Math.random()); return c; }
-    function heart(x,y){ const h=add([ rect(14,12), pos(x,y), area(), anchor("center"), color(255,120,120), outline(2, COL.ink), "heart" ]); pulse(h,1,0.1,3.2,Math.random()); return h; }
+    function heart(x,y){ const h=add([ rect(14,12), pos(x,y), area(), anchor("center", color(255,120,120), outline(2, COL.ink), "heart" ]); pulse(h,1,0.1,3.2,Math.random()); return h; }
 
     // Yerleşim
     allyToprak(820,280); allyHusband(1180,340); allyFriend(1480,260);
@@ -316,10 +342,10 @@
     heart(600,330); heart(1380,260);
 
     // Finish = laptop
-    const laptop = add([ rect(60,36), pos(1750,262), area(), anchor("center"), color(rgb(60,70,80)), outline(2,COL.ink), "finish" ]);
-    const screen = laptop.add([ pos(0,-10), rect(52,20), anchor("center"), color(rgb(15,20,28)) ]);
+    const laptop = add([ rect(60,36), pos(1750,262), area(), anchor("center", color(rgb(60,70,80)), outline(2,COL.ink), "finish" ]);
+    const screen = laptop.add([ pos(0,-10), rect(52,20), anchor("center", color(rgb(15,20,28)) ]);
     const codeLines = []; for(let y=-12;y<=-4;y+=4){ codeLines.push(laptop.add([ pos(-20,y), rect(36,1), color(rgb(120,220,160)) ])); }
-    laptop.add([ pos(0,10), rect(56,6), anchor("center"), color(rgb(80,90,100)) ]);
+    laptop.add([ pos(0,10), rect(56,6), anchor("center", color(rgb(80,90,100)) ]);
     laptop.onUpdate(()=>{ codeLines.forEach((ln,i)=>{ const w = 30 + Math.floor((Math.sin(t*3 + i)*3) + 6); ln.scale = vec2(w/36,1); }); });
 
     // Çarpışmalar
@@ -333,19 +359,19 @@
   // ---------- OVER / WIN ----------
   scene("over",(score=0)=>{
     add([ text("Oyun Bitti", { size: 42, align:"center" }), anchor("center"), pos(width()/2, height()/2 - 40), color(COL.white) ]);
-    add([ text("Skor: "+score, { size: 28, align:"center" }), anchor("center"), pos(width()/2, height()/2), color(COL.cyan) ]);
-    add([ text("May the Data be with You ✨", { size: 22, align:"center" }), anchor("center"), pos(width()/2, height()/2 + 40), color(COL.white) ]);
-    add([ text("[R] Restart   |   [M] Menu", { size: 16, align:"center" }), anchor("center"), pos(width()/2, height()/2 + 88), color(rgb(200,200,200)) ]);
+    add([ text("Skor: "+score, { size: 28, align:"center" }), anchor("center", pos(width()/2, height()/2), color(COL.cyan) ]);
+    add([ text("May the Data be with You ✨", { size: 22, align:"center" }), anchor("center", pos(width()/2, height()/2 + 40), color(COL.white) ]);
+    add([ text("[R] Restart   |   [M] Menu", { size: 16, align:"center" }), anchor("center", pos(width()/2, height()/2 + 88), color(rgb(200,200,200)) ]);
     onKeyPress("r", ()=>{ ensureAudio(); go("game"); });
     onKeyPress("m", ()=> go("menu"));
     onClick(()=>{ ensureAudio(); go("game"); });
   });
 
   scene("win",(score=0)=>{
-    add([ text("Mission Complete!", { size: 42, align:"center" }), anchor("center"), pos(width()/2, height()/2 - 40), color(COL.white) ]);
-    add([ text("Skor: "+score, { size: 28, align:"center" }), anchor("center"), pos(width()/2, height()/2), color(COL.cyan) ]);
-    add([ text("May the Data be with You ✨", { size: 22, align:"center" }), anchor("center"), pos(width()/2, height()/2 + 40), color(COL.white) ]);
-    add([ text("[R] Restart   |   [M] Menu", { size: 16, align:"center" }), anchor("center"), pos(width()/2, height()/2 + 88), color(rgb(200,200,200)) ]);
+    add([ text("Mission Complete!", { size: 42, align:"center" }), anchor("center", pos(width()/2, height()/2 - 40), color(COL.white) ]);
+    add([ text("Skor: "+score, { size: 28, align:"center" }), anchor("center", pos(width()/2, height()/2), color(COL.cyan) ]);
+    add([ text("May the Data be with You ✨", { size: 22, align:"center" }), anchor("center", pos(width()/2, height()/2 + 40), color(COL.white) ]);
+    add([ text("[R] Restart   |   [M] Menu", { size: 16, align:"center" }), anchor("center", pos(width()/2, height()/2 + 88), color(rgb(200,200,200)) ]);
     onKeyPress("r", ()=>{ ensureAudio(); go("game"); });
     onKeyPress("m", ()=> go("menu"));
     onClick(()=>{ ensureAudio(); go("game"); });
